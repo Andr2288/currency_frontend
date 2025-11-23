@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, LogOut, Database, Clock, CheckCircle, XCircle, Settings } from "lucide-react";
+import { RefreshCw, LogOut, Database, Clock, CheckCircle, XCircle, Settings, FileText } from "lucide-react";
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "../store/useAuthStore";
 import ApiSourcesManagement from "./ApiSourcesManagement";
+import LogsViewer from "./LogsViewer";
 
 const AdminDashboard = () => {
     const [banks, setBanks] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(false);
     const [message, setMessage] = useState(null);
-    const [activeTab, setActiveTab] = useState("overview"); // overview | sources
+    const [activeTab, setActiveTab] = useState("overview"); // overview | sources | logs
     const navigate = useNavigate();
 
     const { authUser, logout } = useAuthStore();
@@ -140,6 +141,13 @@ const AdminDashboard = () => {
                         <Settings className="w-4 h-4" />
                         Управління джерелами
                     </button>
+                    <button
+                        className={`tab gap-2 ${activeTab === 'logs' ? 'tab-active' : ''}`}
+                        onClick={() => setActiveTab('logs')}
+                    >
+                        <FileText className="w-4 h-4" />
+                        Логи системи
+                    </button>
                 </div>
 
                 {/* Tab Content */}
@@ -197,7 +205,7 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* Banks Table */}
-                        <div className="card bg-base-100 mb-15 shadow-xl">
+                        <div className="card bg-base-100 shadow-xl">
                             <div className="card-body">
                                 <h2 className="card-title mb-4">Джерела API (Банки)</h2>
 
@@ -276,7 +284,9 @@ const AdminDashboard = () => {
                     </>
                 )}
 
-                <ApiSourcesManagement />
+                {activeTab === 'sources' && <ApiSourcesManagement />}
+
+                {activeTab === 'logs' && <LogsViewer />}
             </div>
         </div>
     );

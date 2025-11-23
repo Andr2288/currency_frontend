@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, User, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
+import { fetchCsrfToken } from "../lib/axios";
 
 const LoginPage = () => {
     const [username, setUsername] = useState("");
@@ -11,6 +12,11 @@ const LoginPage = () => {
 
     const navigate = useNavigate();
     const { login, isLoggingIn, authUser } = useAuthStore();
+
+    // Завантажуємо CSRF токен при mount
+    useEffect(() => {
+        fetchCsrfToken();
+    }, []);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -22,18 +28,15 @@ const LoginPage = () => {
 
         setError("");
 
-        // Використовуємо auth store
         const success = await login(username, password);
 
         if (success) {
-            // Отримуємо оновлені дані користувача
             const user = useAuthStore.getState().authUser;
 
-            // Редірект залежно від ролі
             if (user && user.role === "Admin") {
                 navigate("/admin/dashboard");
             } else {
-                navigate("/"); // Звичайні користувачі йдуть на головну
+                navigate("/");
             }
         } else {
             setError("Невірний логін або пароль");

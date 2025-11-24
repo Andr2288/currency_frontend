@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import ConverterPage from "./pages/ConverterPage.jsx";
+import HistoryPage from "./pages/HistoryPage.jsx"; // NEW: Import the history page
 import LoginPage from "./pages/LoginPage.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -36,21 +37,7 @@ const App = () => {
                 {/* Public Routes */}
                 <Route path="/" element={<HomePage />} />
                 <Route path="/converter" element={<ConverterPage />} />
-                <Route path="/history" element={
-                    <div className="container mx-auto px-4 py-8">
-                        <div className="card bg-base-100 shadow-xl">
-                            <div className="card-body">
-                                <h1 className="text-3xl font-bold mb-4">📊 Історія курсів</h1>
-                                <div className="alert alert-info">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                    <span>Coming soon...</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                } />
+                <Route path="/history" element={<HistoryPage />} /> {/* NEW: Use the real HistoryPage */}
 
                 {/* Login Route - доступний для всіх */}
                 <Route path="/admin/login" element={<LoginPage />} />

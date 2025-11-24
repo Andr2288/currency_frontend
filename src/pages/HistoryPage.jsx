@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Calendar, TrendingUp, TrendingDown, Minus, Building2, RefreshCw, Filter, BarChart3 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
 import { axiosInstance } from "../lib/axios";
 
 const HistoryPage = () => {
@@ -83,29 +84,70 @@ const HistoryPage = () => {
         return `${sign}${change.toFixed(4)}`;
     };
 
-    // Простий лінійний граф (CSS-based)
-    const renderSimpleChart = (data) => {
+    // Підготовка даних для графіка
+    const prepareChartData = (data) => {
+        if (!data || data.length === 0) return [];
+
+        return data.map(item => ({
+            date: formatDateShort(item.date),
+            fullDate: formatDate(item.date),
+            buy: parseFloat(item.buy),
+            sell: parseFloat(item.sell),
+            source: item.source
+        }));
+    };
+
+    // Кастомний Tooltip для графіка
+    const CustomTooltip = ({ active, payload }) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-base-100 border border-base-300 rounded-lg shadow-lg p-3">
+                    <p className="font-semibold mb-2">{payload[0].payload.fullDate}</p>
+                    <p className="text-sm text-gray-600 mb-1">{payload[0].payload.source}</p>
+                    <div className="flex gap-4">
+                        <div>
+                            <p className="text-xs text-gray-500">Купівля</p>
+                            <p className="font-semibold text-green-600">
+                                {payload[0].value.toFixed(4)}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500">Продаж</p>
+                            <p className="font-semibold text-red-600">
+                                {payload[1]?.value.toFixed(4)}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        return null;
+    };
+
+    // Рендер графіка з Recharts
+    const renderChart = (data) => {
         if (!data || data.length === 0) return null;
 
-        const rates = data.map(item => parseFloat(item.buy)); // FIX: buy замість Buy
+        const chartData = prepareChartData(data);
+        const rates = chartData.map(item => item.buy);
         const minRate = Math.min(...rates);
         const maxRate = Math.max(...rates);
-        const range = maxRate - minRate;
+        const isStable = maxRate - minRate < 0.01;
 
-        if (range === 0) {
-            // Якщо всі курси однакові - показуємо пряму лінію
+        if (isStable) {
             return (
-                <div className="bg-base-200 rounded-lg p-4 mb-6">
+                <div className="bg-base-200 rounded-lg p-6 mb-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold">📈 Графік зміни курсу</h3>
+                        <h3 className="font-semibold text-lg">📈 Графік зміни курсу</h3>
                         <div className="text-sm text-gray-500">
                             Стабільний курс: {rates[0].toFixed(4)}
                         </div>
                     </div>
-                    <div className="h-32 bg-base-300 rounded flex items-center justify-center">
+                    <div className="h-64 bg-base-300 rounded flex items-center justify-center">
                         <div className="text-center text-gray-500">
-                            <Minus className="w-8 h-8 mx-auto mb-2" />
-                            <p>Курс стабільний</p>
+                            <Minus className="w-12 h-12 mx-auto mb-3" />
+                            <p className="text-lg font-medium">Курс стабільний</p>
+                            <p className="text-sm">Зміни менше 0.01</p>
                         </div>
                     </div>
                 </div>
@@ -113,73 +155,106 @@ const HistoryPage = () => {
         }
 
         return (
-            <div className="bg-base-200 rounded-lg p-4 mb-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold flex items-center gap-2">
+            <div className="bg-base-200 rounded-lg p-6 mb-6">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-semibold text-lg flex items-center gap-2">
                         <BarChart3 className="w-5 h-5" />
                         Графік зміни курсу
                     </h3>
-                    <div className="text-sm text-gray-500">
-                        {minRate.toFixed(4)} - {maxRate.toFixed(4)}
+                    <div className="flex gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-green-500 rounded"></div>
+                            <span>Купівля</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-red-500 rounded"></div>
+                            <span>Продаж</span>
+                        </div>
                     </div>
                 </div>
 
-                <div className="h-32 bg-base-300 rounded p-2 relative overflow-hidden">
-                    <svg width="100%" height="100%" className="absolute inset-0">
-                        <polyline
-                            points={data.map((item, index) => {
-                                const x = (index / (data.length - 1)) * 100;
-                                const y = 100 - (((parseFloat(item.buy) - minRate) / range) * 90 + 5); // FIX: buy
-                                return `${x},${y}`;
-                            }).join(' ')}
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            className="text-primary"
+                <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorBuy" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorSell" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis
+                            dataKey="date"
+                            stroke="#6b7280"
+                            style={{ fontSize: '12px' }}
                         />
+                        <YAxis
+                            domain={['auto', 'auto']}
+                            stroke="#6b7280"
+                            style={{ fontSize: '12px' }}
+                            tickFormatter={(value) => value.toFixed(2)}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area
+                            type="monotone"
+                            dataKey="buy"
+                            stroke="#10b981"
+                            strokeWidth={2}
+                            fill="url(#colorBuy)"
+                            name="Купівля"
+                        />
+                        <Area
+                            type="monotone"
+                            dataKey="sell"
+                            stroke="#ef4444"
+                            strokeWidth={2}
+                            fill="url(#colorSell)"
+                            name="Продаж"
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
 
-                        {/* Точки на графіку */}
-                        {data.map((item, index) => {
-                            const x = (index / (data.length - 1)) * 100;
-                            const y = 100 - (((parseFloat(item.buy) - minRate) / range) * 90 + 5); // FIX: buy
-                            return (
-                                <circle
-                                    key={index}
-                                    cx={`${x}%`}
-                                    cy={`${y}%`}
-                                    r="3"
-                                    className="fill-primary"
-                                />
-                            );
-                        })}
-                    </svg>
-                </div>
-
-                {/* Мін/макс значення */}
-                <div className="flex justify-between mt-2 text-xs text-gray-500">
+                <div className="flex justify-between mt-4 text-sm text-gray-500">
                     <span>Мін: {minRate.toFixed(4)}</span>
                     <span>Макс: {maxRate.toFixed(4)}</span>
+                    <span>Різниця: {(maxRate - minRate).toFixed(4)}</span>
                 </div>
             </div>
         );
     };
 
-    const formatDate = (dateString) => {
-        // FIX: API повертає "2025-11-23 21:40", додаємо секунди для кращого парсингу
-        if (!dateString) return 'Invalid Date';
+    const formatDateShort = (dateString) => {
+        if (!dateString) return '';
 
-        // Якщо формат "2025-11-23 21:40" - додаємо секунди
         let formattedDate = dateString;
         if (!/:\d{2}:\d{2}/.test(dateString) && /:\d{2}$/.test(dateString)) {
             formattedDate = dateString + ':00';
         }
 
         const date = new Date(formattedDate);
+        if (isNaN(date.getTime())) return dateString;
 
-        // Перевіряємо чи дата валідна
-        if (isNaN(date.getTime())) {
-            return dateString; // Повертаємо оригінальний рядок якщо не можемо розпарсити
+        return date.toLocaleString('uk-UA', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return 'Invalid Date';
+
+        let formattedDate = dateString;
+        if (!/:\d{2}:\d{2}/.test(dateString) && /:\d{2}$/.test(dateString)) {
+            formattedDate = dateString + ':00';
         }
+
+        const date = new Date(formattedDate);
+        if (isNaN(date.getTime())) return dateString;
 
         return date.toLocaleString('uk-UA', {
             month: '2-digit',
@@ -364,7 +439,7 @@ const HistoryPage = () => {
                             </div>
 
                             {/* Chart */}
-                            {renderSimpleChart(historyData.data)}
+                            {renderChart(historyData.data)}
 
                             {/* History Table */}
                             <div className="card bg-base-100 shadow-xl">
@@ -395,10 +470,10 @@ const HistoryPage = () => {
                                                             <span className="font-medium">{item.source}</span>
                                                         </div>
                                                     </td>
-                                                    <td className="font-semibold">
+                                                    <td className="font-semibold text-green-600">
                                                         {parseFloat(item.buy).toFixed(4)}
                                                     </td>
-                                                    <td className="font-semibold">
+                                                    <td className="font-semibold text-red-600">
                                                         {parseFloat(item.sell).toFixed(4)}
                                                     </td>
                                                     <td className={`font-medium ${getTrendColor(item.trend)}`}>
@@ -408,9 +483,9 @@ const HistoryPage = () => {
                                                         <div className="flex items-center gap-1">
                                                             {getTrendIcon(item.trend)}
                                                             <span className={`text-sm font-medium ${getTrendColor(item.trend)}`}>
-                                                                    {item.trend === 'up' ? 'Зростання' :
-                                                                        item.trend === 'down' ? 'Спад' : 'Стабільно'}
-                                                                </span>
+                                                                {item.trend === 'up' ? 'Зростання' :
+                                                                    item.trend === 'down' ? 'Спад' : 'Стабільно'}
+                                                            </span>
                                                         </div>
                                                     </td>
                                                 </tr>

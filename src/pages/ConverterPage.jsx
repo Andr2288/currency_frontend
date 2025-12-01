@@ -7,6 +7,7 @@ const ConverterPage = () => {
     const [toCurrency, setToCurrency] = useState("UAH");
     const [amount, setAmount] = useState("100");
     const [selectedBank, setSelectedBank] = useState("");
+    const [conversionType, setConversionType] = useState("sell"); // buy, sell, average
     const [banks, setBanks] = useState([]);
     const [result, setResult] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -45,20 +46,18 @@ const ConverterPage = () => {
         setError(null);
 
         try {
-            // Параметри запиту
             const params = {
                 from: fromCurrency,
                 to: toCurrency,
-                amount: parseFloat(amount)
+                amount: parseFloat(amount),
+                type: conversionType
             };
 
-            // Додаємо банк, якщо обрано
             if (selectedBank) {
                 params.source = selectedBank;
             }
 
             const response = await axiosInstance.get("/Conversion", { params });
-
             setResult(response.data);
         } catch (err) {
             console.error("Conversion error:", err);
@@ -99,10 +98,43 @@ const ConverterPage = () => {
                                     <span className="label-text font-semibold">З валюти</span>
                                 </label>
                                 <select
-                                    className="select select-bordered w-full select-lg"
+                                    className="select select-bordered w-full"
                                     value={fromCurrency}
                                     onChange={(e) => {
                                         setFromCurrency(e.target.value);
+                                        setResult(null);
+                                    }}
+                                >
+                                    {currencies.map((currency) => (
+                                        <option key={currency.code} value={currency.code}>
+                                            {currency.symbol} {currency.code} - {currency.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Swap Button */}
+                            <div className="flex justify-center mb-4">
+                                <button
+                                    type="button"
+                                    className="btn btn-circle btn-outline"
+                                    onClick={handleSwap}
+                                    title="Поміняти місцями"
+                                >
+                                    <ArrowLeftRight className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* To Currency */}
+                            <div className="form-control mb-4">
+                                <label className="label">
+                                    <span className="label-text font-semibold">В валюту</span>
+                                </label>
+                                <select
+                                    className="select select-bordered w-full"
+                                    value={toCurrency}
+                                    onChange={(e) => {
+                                        setToCurrency(e.target.value);
                                         setResult(null);
                                     }}
                                 >
@@ -121,57 +153,41 @@ const ConverterPage = () => {
                                 </label>
                                 <input
                                     type="number"
-                                    step="0.01"
-                                    min="0"
-                                    className="input input-bordered w-full input-lg"
+                                    className="input input-bordered w-full"
                                     value={amount}
                                     onChange={(e) => {
                                         setAmount(e.target.value);
                                         setResult(null);
                                     }}
                                     placeholder="Введіть суму"
+                                    step="0.01"
+                                    min="0"
                                 />
                             </div>
 
-                            {/* Swap Button */}
-                            <div className="flex justify-center mb-4">
-                                <button
-                                    type="button"
-                                    className="btn btn-circle btn-outline"
-                                    onClick={handleSwap}
-                                >
-                                    <ArrowLeftRight className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* To Currency */}
+                            {/* Type Selection - Minimal */}
                             <div className="form-control mb-4">
                                 <label className="label">
-                                    <span className="label-text font-semibold">В валюту</span>
+                                    <span className="label-text font-semibold">Тип курсу</span>
                                 </label>
                                 <select
-                                    className="select select-bordered w-full select-lg"
-                                    value={toCurrency}
+                                    className="select select-bordered w-full"
+                                    value={conversionType}
                                     onChange={(e) => {
-                                        setToCurrency(e.target.value);
+                                        setConversionType(e.target.value);
                                         setResult(null);
                                     }}
                                 >
-                                    {currencies.map((currency) => (
-                                        <option key={currency.code} value={currency.code}>
-                                            {currency.symbol} {currency.code} - {currency.name}
-                                        </option>
-                                    ))}
+                                    <option value="buy">Купівля (банк купує у вас)</option>
+                                    <option value="sell">Продаж (ви купуєте у банку)</option>
+                                    <option value="average">Середній курс</option>
                                 </select>
                             </div>
 
-                            {/* NEW: Bank Selection */}
+                            {/* Bank Selection */}
                             <div className="form-control mb-6">
                                 <label className="label">
-                                    <span className="label-text font-semibold flex items-center gap-2">
-                                        <Building2 className="w-4 h-4" />
-                                        Банк (необов'язково)
-                                    </span>
+                                    <span className="label-text font-semibold">Банк (опціонально)</span>
                                 </label>
                                 <select
                                     className="select select-bordered w-full"
@@ -181,72 +197,75 @@ const ConverterPage = () => {
                                         setResult(null);
                                     }}
                                 >
-                                    <option value="">Найкращий курс (автоматично)</option>
+                                    <option value="">Автоматичний вибір</option>
                                     {banks.map((bank) => (
                                         <option key={bank.id} value={bank.name}>
                                             {bank.name}
                                         </option>
                                     ))}
                                 </select>
-                                <div className="label">
-                                    <span className="label-text-alt text-gray-500">
-                                        {selectedBank ? `Курс від ${selectedBank}` : "Система обере найвигідніший курс"}
-                                    </span>
-                                </div>
                             </div>
+
+                            {/* Error */}
+                            {error && (
+                                <div className="alert alert-error mb-4">
+                                    <span>{error}</span>
+                                </div>
+                            )}
 
                             {/* Convert Button */}
                             <button
                                 type="submit"
-                                className={`btn btn-primary w-full btn-lg gap-2 ${isLoading ? 'loading' : ''}`}
-                                disabled={isLoading}
+                                className={`btn btn-primary w-full gap-2 ${isLoading ? 'loading' : ''}`}
+                                disabled={isLoading || !amount || !fromCurrency || !toCurrency}
                             >
                                 {!isLoading && <RefreshCw className="w-5 h-5" />}
-                                {isLoading ? "Конвертація..." : "Конвертувати"}
+                                Конвертувати
                             </button>
-
-                            {/* Error */}
-                            {error && (
-                                <div className="alert alert-error mt-4">
-                                    <span>{error}</span>
-                                </div>
-                            )}
                         </form>
                     </div>
                 </div>
 
                 {/* Result */}
-                <div className="card bg-base-100 shadow-xl">
-                    <div className="card-body">
-                        <h2 className="card-title mb-4">Результат</h2>
+                <div>
+                    {result ? (
+                        <div className="card bg-base-100 shadow-xl">
+                            <div className="card-body">
+                                <h3 className="text-2xl font-bold mb-4">Результат</h3>
 
-                        {result ? (
-                            <div className="space-y-6">
                                 {/* Main Result */}
-                                <div className="bg-primary text-primary-content rounded-lg p-6">
-                                    <div className="text-sm opacity-80 mb-2">
-                                        {amount} {getCurrencyInfo(result.fromCurrencyCode).symbol} {result.fromCurrencyCode}
+                                <div className="text-center bg-primary text-primary-content rounded-lg p-6 mb-4">
+                                    <div className="text-lg mb-2">
+                                        {parseFloat(amount).toLocaleString('uk-UA')} {getCurrencyInfo(fromCurrency).symbol}
                                     </div>
-                                    <div className="text-4xl font-bold">
-                                        {result.convertedAmount.toFixed(2)} {getCurrencyInfo(result.toCurrencyCode).symbol}
-                                    </div>
-                                    <div className="text-sm opacity-80 mt-2">
-                                        {result.toCurrencyCode}
+                                    <div className="text-3xl font-bold">
+                                        {result.convertedAmount.toLocaleString('uk-UA', {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 4
+                                        })} {getCurrencyInfo(toCurrency).symbol}
                                     </div>
                                 </div>
 
-                                {/* Exchange Rate Info */}
-                                <div className="divider"></div>
-
+                                {/* Details */}
                                 <div className="space-y-3">
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">Курс:</span>
                                         <span className="font-semibold">
-                                            1 {result.fromCurrencyCode} = {result.exchangeRate.toFixed(4)} {result.toCurrencyCode}
+                                            {result.exchangeRate.toLocaleString('uk-UA', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 6
+                                            })}
                                         </span>
                                     </div>
 
-                                    {/* Enhanced Source Display */}
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Тип:</span>
+                                        <span className="font-semibold">
+                                            {conversionType === 'buy' ? 'Купівля' :
+                                                conversionType === 'sell' ? 'Продаж' : 'Середній'}
+                                        </span>
+                                    </div>
+
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">Джерело:</span>
                                         <span className="font-semibold flex items-center gap-2">
@@ -267,36 +286,29 @@ const ConverterPage = () => {
                                             })}
                                         </span>
                                     </div>
-
-                                    {/* NEW: Bank Selection Info */}
-                                    {selectedBank && (
-                                        <div className="alert alert-info">
-                                            <Building2 className="w-5 h-5" />
-                                            <span>Курс від {selectedBank}</span>
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* Quick Conversion Tips */}
-                                <div className="divider"></div>
-
-                                <div className="bg-base-200 rounded-lg p-4">
-                                    <div className="text-sm space-y-1">
-                                        <div>• Курс оновлюється автоматично кожні 10 хвилин</div>
-                                        <div>• НБУ - офіційний курс (оновлюється раз на день)</div>
-                                        <div>• ПриватБанк - комерційний курс (може змінюватися частіше)</div>
-                                        <div>• Без вибору банку система знайде найвигідніший курс</div>
+                                {/* Additional Info */}
+                                {selectedBank && (
+                                    <div className="alert alert-info mt-4">
+                                        <span>Курс від {selectedBank}</span>
                                     </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="card bg-base-100 shadow-xl">
+                            <div className="card-body">
+                                <div className="text-center py-12 text-gray-500">
+                                    <ArrowLeftRight className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                    <p className="text-lg mb-2">Виберіть валюти та натисніть "Конвертувати"</p>
+                                    <p className="text-sm">
+                                        Оберіть тип курсу та конкретний банк або залиште автоматичний вибір
+                                    </p>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                                <ArrowLeftRight className="w-16 h-16 mb-4 opacity-50" />
-                                <p className="text-lg mb-2">Виберіть валюти та натисніть "Конвертувати"</p>
-                                <p className="text-sm">Оберіть конкретний банк або залиште автоматичний вибір</p>
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, Power, PowerOff, Save, X } from "lucide-react";
+import { Plus, Edit2, Trash2, Power, PowerOff, Save, X, TestTube2 } from "lucide-react";
 import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 
 const ApiSourcesManagement = () => {
     const [sources, setSources] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isTestingApi, setIsTestingApi] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [isCreating, setIsCreating] = useState(false);
+    const [validationErrors, setValidationErrors] = useState([]);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -35,16 +37,56 @@ const ApiSourcesManagement = () => {
         }
     };
 
+    // НОВЕ: Тестування API перед створенням
+    const handleTestApi = async () => {
+        if (!formData.name || !formData.url) {
+            toast.error("Заповніть назву та URL для тестування");
+            return;
+        }
+
+        setIsTestingApi(true);
+        setValidationErrors([]);
+
+        try {
+            const response = await axiosInstance.post("/ApiSources/test", formData);
+
+            if (response.data.success) {
+                toast.success("✅ API протестовано успішно! Можна створювати.");
+                setValidationErrors([]);
+            }
+        } catch (error) {
+            console.error("API test failed:", error);
+
+            if (error.response?.data?.errors) {
+                setValidationErrors(error.response.data.errors);
+                toast.error("❌ API не пройшло валідацію");
+            } else {
+                toast.error("Помилка тестування API");
+            }
+        } finally {
+            setIsTestingApi(false);
+        }
+    };
+
     const handleCreate = async () => {
         try {
             await axiosInstance.post("/ApiSources", formData);
-            toast.success("Джерело створено");
+            toast.success("✅ Джерело успішно створено");
             setIsCreating(false);
             resetForm();
             fetchSources();
         } catch (error) {
             console.error("Error creating source:", error);
-            toast.error("Помилка створення джерела");
+
+            // Показуємо детальні помилки валідації
+            if (error.response?.data?.errors) {
+                setValidationErrors(error.response.data.errors);
+                toast.error("❌ Структура API не відповідає шаблону");
+            } else if (error.response?.data?.message) {
+                toast.error(error.response.data.message);
+            } else {
+                toast.error("Помилка створення джерела");
+            }
         }
     };
 
@@ -57,7 +99,12 @@ const ApiSourcesManagement = () => {
             fetchSources();
         } catch (error) {
             console.error("Error updating source:", error);
-            toast.error("Помилка оновлення джерела");
+
+            if (error.response?.data?.errors) {
+                toast.error("Новий URL не відповідає шаблону");
+            } else {
+                toast.error("Помилка оновлення джерела");
+            }
         }
     };
 
@@ -74,32 +121,20 @@ const ApiSourcesManagement = () => {
         }
     };
 
-    const handleToggleActive = async (id) => {
+    const toggleSourceStatus = async (id, currentStatus) => {
         try {
-            await axiosInstance.patch(`/ApiSources/${id}/toggle`);
-            toast.success("Статус змінено");
+            const source = sources.find(s => s.id === id);
+            await axiosInstance.put(`/ApiSources/${id}`, {
+                ...source,
+                isActive: !currentStatus
+            });
+
+            toast.success(`Джерело ${!currentStatus ? 'активовано' : 'деактивовано'}`);
             fetchSources();
         } catch (error) {
-            console.error("Error toggling source:", error);
-            toast.error("Помилка зміни статусу");
+            console.error("Error toggling source status:", error);
+            toast.error("Помилка зміни статусу джерела");
         }
-    };
-
-    const startEdit = (source) => {
-        setEditingId(source.id);
-        setFormData({
-            name: source.name,
-            url: source.url,
-            format: source.format,
-            updateIntervalMinutes: source.updateIntervalMinutes,
-            isActive: source.isActive
-        });
-    };
-
-    const cancelEdit = () => {
-        setEditingId(null);
-        setIsCreating(false);
-        resetForm();
     };
 
     const resetForm = () => {
@@ -110,32 +145,39 @@ const ApiSourcesManagement = () => {
             updateIntervalMinutes: 60,
             isActive: true
         });
+        setValidationErrors([]);
     };
 
-    const formatDate = (dateString) => {
-        if (!dateString) return "Ніколи";
-        return new Date(dateString).toLocaleString('uk-UA', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
+    const startEdit = (source) => {
+        setFormData({
+            name: source.name,
+            url: source.url,
+            format: source.format,
+            updateIntervalMinutes: source.updateIntervalMinutes,
+            isActive: source.isActive
         });
+        setEditingId(source.id);
+        setValidationErrors([]);
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setIsCreating(false);
+        resetForm();
     };
 
     if (isLoading) {
         return (
-            <div className="flex justify-center py-8">
+            <div className="flex justify-center items-center min-h-screen">
                 <span className="loading loading-spinner loading-lg"></span>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            {/* Header with Create Button */}
+        <div className="container mx-auto p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold">Управління джерелами API</h2>
+                <h2 className="text-3xl font-bold">Керування джерелами API</h2>
                 {!isCreating && (
                     <button
                         className="btn btn-primary gap-2"
@@ -152,18 +194,49 @@ const ApiSourcesManagement = () => {
                 <div className="card bg-base-100 shadow-xl">
                     <div className="card-body">
                         <h3 className="card-title">Нове джерело API</h3>
+
+                        {/* Помилки валідації */}
+                        {validationErrors.length > 0 && (
+                            <div className="alert alert-error">
+                                <div>
+                                    <h4 className="font-bold">Помилки валідації:</h4>
+                                    <ul className="list-disc list-inside space-y-1">
+                                        {validationErrors.map((error, index) => (
+                                            <li key={index}>{error}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="form-control">
                                 <label className="label">
-                                    <span className="label-text">Назва</span>
+                                    <span className="label-text">Назва *</span>
                                 </label>
                                 <input
                                     type="text"
                                     className="input input-bordered"
                                     value={formData.name}
                                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                                    placeholder="PrivatBank, NBU, Monobank..."
+                                    placeholder="ПриватБанк, НБУ, Монобанк..."
                                 />
+                            </div>
+
+                            <div className="form-control">
+                                <label className="label">
+                                    <span className="label-text">URL *</span>
+                                </label>
+                                <input
+                                    type="url"
+                                    className="input input-bordered"
+                                    value={formData.url}
+                                    onChange={(e) => setFormData({...formData, url: e.target.value})}
+                                    placeholder="https://api.example.com/rates"
+                                />
+                                <label className="label">
+                                    <span className="label-text-alt">API повинно повертати JSON з валютними курсами</span>
+                                </label>
                             </div>
 
                             <div className="form-control">
@@ -176,22 +249,10 @@ const ApiSourcesManagement = () => {
                                     onChange={(e) => setFormData({...formData, format: e.target.value})}
                                 >
                                     <option value="JSON">JSON</option>
-                                    <option value="XML">XML</option>
-                                    <option value="HTML">HTML</option>
                                 </select>
-                            </div>
-
-                            <div className="form-control md:col-span-2">
                                 <label className="label">
-                                    <span className="label-text">URL API</span>
+                                    <span className="label-text-alt">Поки підтримується тільки JSON</span>
                                 </label>
-                                <input
-                                    type="url"
-                                    className="input input-bordered"
-                                    value={formData.url}
-                                    onChange={(e) => setFormData({...formData, url: e.target.value})}
-                                    placeholder="https://api.example.com/rates"
-                                />
                             </div>
 
                             <div className="form-control">
@@ -220,15 +281,30 @@ const ApiSourcesManagement = () => {
                             </div>
                         </div>
 
-                        <div className="card-actions justify-end mt-4">
-                            <button className="btn btn-ghost" onClick={cancelEdit}>
-                                <X className="w-4 h-4" />
-                                Скасувати
+                        <div className="card-actions justify-between mt-6">
+                            <button
+                                className="btn btn-outline gap-2"
+                                onClick={handleTestApi}
+                                disabled={isTestingApi}
+                            >
+                                <TestTube2 className="w-4 h-4" />
+                                {isTestingApi ? "Тестування..." : "Тестувати API"}
                             </button>
-                            <button className="btn btn-primary" onClick={handleCreate}>
-                                <Save className="w-4 h-4" />
-                                Створити
-                            </button>
+
+                            <div className="space-x-2">
+                                <button className="btn btn-ghost gap-2" onClick={cancelEdit}>
+                                    <X className="w-4 h-4" />
+                                    Скасувати
+                                </button>
+                                <button
+                                    className="btn btn-primary gap-2"
+                                    onClick={handleCreate}
+                                    disabled={isTestingApi}
+                                >
+                                    <Save className="w-4 h-4" />
+                                    Створити
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -282,65 +358,49 @@ const ApiSourcesManagement = () => {
                                         )}
                                     </td>
                                     <td>
-                                        {editingId === source.id ? (
-                                            <select
-                                                className="select select-bordered select-sm"
-                                                value={formData.format}
-                                                onChange={(e) => setFormData({...formData, format: e.target.value})}
-                                            >
-                                                <option value="JSON">JSON</option>
-                                                <option value="XML">XML</option>
-                                                <option value="HTML">HTML</option>
-                                            </select>
-                                        ) : (
-                                            <div className="badge badge-outline">{formData.format}</div>
-                                        )}
+                                        <div className="badge badge-outline">{source.format}</div>
                                     </td>
-                                    <td>
-                                        {editingId === source.id ? (
-                                            <input
-                                                type="number"
-                                                className="input input-bordered input-sm w-20"
-                                                value={formData.updateIntervalMinutes}
-                                                onChange={(e) => setFormData({...formData, updateIntervalMinutes: parseInt(e.target.value)})}
-                                            />
-                                        ) : (
-                                            source.updateIntervalMinutes
-                                        )}
-                                    </td>
+                                    <td>{source.updateIntervalMinutes}</td>
                                     <td>
                                         <button
-                                            className={`btn btn-sm gap-2 ${source.isActive ? 'btn-success' : 'btn-error'}`}
-                                            onClick={() => handleToggleActive(source.id)}
+                                            className={`btn btn-sm gap-2 ${source.isActive ?
+                                                'btn-success' : 'btn-error'}`}
+                                            onClick={() => toggleSourceStatus(source.id, source.isActive)}
                                         >
                                             {source.isActive ? (
                                                 <>
-                                                    <Power className="w-3 h-3" />
-                                                    Активний
+                                                    <Power className="w-4 h-4" />
+                                                    Активне
                                                 </>
                                             ) : (
                                                 <>
-                                                    <PowerOff className="w-3 h-3" />
-                                                    Неактивний
+                                                    <PowerOff className="w-4 h-4" />
+                                                    Неактивне
                                                 </>
                                             )}
                                         </button>
                                     </td>
-                                    <td className="text-sm">
-                                        {formatDate(source.lastUpdateAt)}
+                                    <td>
+                                        {source.lastUpdateAt ? (
+                                            <span className="text-sm">
+                                                {new Date(source.lastUpdateAt).toLocaleString()}
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-500">Ніколи</span>
+                                        )}
                                     </td>
                                     <td>
-                                        <div className="flex gap-2">
+                                        <div className="join">
                                             {editingId === source.id ? (
                                                 <>
                                                     <button
-                                                        className="btn btn-sm btn-success"
+                                                        className="btn btn-sm btn-success join-item"
                                                         onClick={() => handleUpdate(source.id)}
                                                     >
                                                         <Save className="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        className="btn btn-sm btn-ghost"
+                                                        className="btn btn-sm btn-ghost join-item"
                                                         onClick={cancelEdit}
                                                     >
                                                         <X className="w-4 h-4" />
@@ -349,13 +409,13 @@ const ApiSourcesManagement = () => {
                                             ) : (
                                                 <>
                                                     <button
-                                                        className="btn btn-sm btn-ghost"
+                                                        className="btn btn-sm btn-primary join-item"
                                                         onClick={() => startEdit(source)}
                                                     >
                                                         <Edit2 className="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        className="btn btn-sm btn-ghost text-error"
+                                                        className="btn btn-sm btn-error join-item"
                                                         onClick={() => handleDelete(source.id)}
                                                     >
                                                         <Trash2 className="w-4 h-4" />

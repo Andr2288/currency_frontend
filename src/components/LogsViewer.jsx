@@ -7,15 +7,20 @@ const LogsViewer = () => {
     const [logs, setLogs] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [count, setCount] = useState(50);
+    const [levelFilter, setLevelFilter] = useState('');
 
     useEffect(() => {
         fetchLogs();
-    }, [count]);
+    }, [count, levelFilter]);
 
     const fetchLogs = async () => {
         setIsLoading(true);
         try {
-            const response = await axiosInstance.get(`/Logs?count=${count}`);
+            let url = `/Logs?count=${count}`;
+            if (levelFilter) {
+                url += `&level=${levelFilter}`;
+            }
+            const response = await axiosInstance.get(url);
             setLogs(response.data);
         } catch (error) {
             console.error("Error fetching logs:", error);
@@ -70,9 +75,20 @@ const LogsViewer = () => {
                         <FileText className="w-5 h-5" />
                         Логи системи
                     </h2>
-                    
+
                     <div className="flex gap-2 items-center">
-                        <select 
+                        <select
+                            className="select select-bordered select-sm"
+                            value={levelFilter}
+                            onChange={(e) => setLevelFilter(e.target.value)}
+                        >
+                            <option value="">Всі рівні</option>
+                            <option value="Info">Info</option>
+                            <option value="Warning">Warning</option>
+                            <option value="Error">Error</option>
+                        </select>
+
+                        <select
                             className="select select-bordered select-sm"
                             value={count}
                             onChange={(e) => setCount(Number(e.target.value))}
@@ -82,8 +98,8 @@ const LogsViewer = () => {
                             <option value={100}>100 записів</option>
                             <option value={200}>200 записів</option>
                         </select>
-                        
-                        <button 
+
+                        <button
                             className={`btn btn-sm btn-primary gap-2 ${isLoading ? 'loading' : ''}`}
                             onClick={fetchLogs}
                             disabled={isLoading}
